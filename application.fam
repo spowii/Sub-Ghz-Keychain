@@ -1,0 +1,9 @@
+App(
+    appid="quad_fob",
+    name="Quad Fob",
+    apptype=FlipperAppType.EXTERNAL,
+    entry_point="quad_fob_app",
+    stack_size=4 * 1024,
+    requires=["gui", "storage", "dialogs"],
+    fap_category="Sub-GHz",
+)
