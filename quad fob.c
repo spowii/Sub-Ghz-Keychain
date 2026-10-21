@@ -102,13 +102,17 @@ static bool load_preset(FlipperFormat* ff, const SubGhzDevice* device, uint8_t**
     if(flipper_format_read_string(ff, "Preset", preset)) {
         const char* p = furi_string_get_cstr(preset);
         if(strstr(p, "Ook270Async")) {
-            ok = subghz_devices_load_preset(device, FuriHalSubGhzPresetOok270Async, NULL);
+            subghz_devices_load_preset(device, FuriHalSubGhzPresetOok270Async, NULL);
+            ok = true;
         } else if(strstr(p, "Ook650Async")) {
-            ok = subghz_devices_load_preset(device, FuriHalSubGhzPresetOok650Async, NULL);
+            subghz_devices_load_preset(device, FuriHalSubGhzPresetOok650Async, NULL);
+            ok = true;
         } else if(strstr(p, "2FSKDev238Async")) {
-            ok = subghz_devices_load_preset(device, FuriHalSubGhzPreset2FSKDev238Async, NULL);
+            subghz_devices_load_preset(device, FuriHalSubGhzPreset2FSKDev238Async, NULL);
+            ok = true;
         } else if(strstr(p, "2FSKDev476Async")) {
-            ok = subghz_devices_load_preset(device, FuriHalSubGhzPreset2FSKDev476Async, NULL);
+            subghz_devices_load_preset(device, FuriHalSubGhzPreset2FSKDev476Async, NULL);
+            ok = true;
         } else if(strstr(p, "Custom")) {
             uint32_t n = 0;
             flipper_format_rewind(ff);
@@ -116,7 +120,8 @@ static bool load_preset(FlipperFormat* ff, const SubGhzDevice* device, uint8_t**
                n <= 128) {
                 *custom = malloc(n);
                 if(flipper_format_read_hex(ff, "Custom_preset_data", *custom, n)) {
-                    ok = subghz_devices_load_preset(device, FuriHalSubGhzPresetCustom, *custom);
+                    subghz_devices_load_preset(device, FuriHalSubGhzPresetCustom, *custom);
+            ok = true;
                 }
             }
         }
