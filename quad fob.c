@@ -6,6 +6,7 @@
 #include <dialogs/dialogs.h>
 #include <flipper_format/flipper_format.h>
 #include <toolbox/level_duration.h>
+#include <lib/subghz/devices/devices.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -93,7 +94,7 @@ static LevelDuration tx_callback(void* context) {
     return level_duration_make(level, dur);
 }
 
-static bool load_preset(FlipperFormat* ff) {
+static bool load_preset(FlipperFormat* ff, const SubGhzDevice* device, uint8_t** custom) {
     FuriString* preset = furi_string_alloc();
     bool ok = false;
 
@@ -101,28 +102,22 @@ static bool load_preset(FlipperFormat* ff) {
     if(flipper_format_read_string(ff, "Preset", preset)) {
         const char* p = furi_string_get_cstr(preset);
         if(strstr(p, "Ook270Async")) {
-            furi_hal_subghz_load_preset(FuriHalSubGhzPresetOok270Async);
-            ok = true;
+            ok = subghz_devices_load_preset(device, FuriHalSubGhzPresetOok270Async, NULL);
         } else if(strstr(p, "Ook650Async")) {
-            furi_hal_subghz_load_preset(FuriHalSubGhzPresetOok650Async);
-            ok = true;
+            ok = subghz_devices_load_preset(device, FuriHalSubGhzPresetOok650Async, NULL);
         } else if(strstr(p, "2FSKDev238Async")) {
-            furi_hal_subghz_load_preset(FuriHalSubGhzPreset2FSKDev238Async);
-            ok = true;
+            ok = subghz_devices_load_preset(device, FuriHalSubGhzPreset2FSKDev238Async, NULL);
         } else if(strstr(p, "2FSKDev476Async")) {
-            furi_hal_subghz_load_preset(FuriHalSubGhzPreset2FSKDev476Async);
-            ok = true;
+            ok = subghz_devices_load_preset(device, FuriHalSubGhzPreset2FSKDev476Async, NULL);
         } else if(strstr(p, "Custom")) {
             uint32_t n = 0;
             flipper_format_rewind(ff);
             if(flipper_format_get_value_count(ff, "Custom_preset_data", &n) && n > 0 &&
                n <= 128) {
-                uint8_t* d = malloc(n);
-                if(flipper_format_read_hex(ff, "Custom_preset_data", d, n)) {
-                    furi_hal_subghz_load_custom_preset(d);
-                    ok = true;
+                *custom = malloc(n);
+                if(flipper_format_read_hex(ff, "Custom_preset_data", *custom, n)) {
+                    ok = subghz_devices_load_preset(device, FuriHalSubGhzPresetCustom, *custom);
                 }
-                free(d);
             }
         }
     }
@@ -174,27 +169,38 @@ static SendResult send_file(Storage* storage, const char* path) {
         }
         if(total == 0) break;
 
-        if(!furi_hal_subghz_is_tx_allowed(freq)) {
+        if(!furi_hal_region_is_frequency_allowed(freq)) {
             res = SendNoTx;
             break;
         }
 
-        furi_hal_subghz_reset();
-        if(!load_preset(ff)) {
-            furi_hal_subghz_sleep();
-            break;
-        }
-        furi_hal_subghz_set_frequency_and_path(freq);
+        subghz_devices_init();
+        const SubGhzDevice* device = subghz_devices_get_by_name("cc1101_int");
+        if(device) {
+            subghz_devices_begin(device);
+            subghz_devices_reset(device);
+            subghz_devices_idle(device);
 
-        TxCtx ctx = {.data = data, .count = total, .pos = 0};
-        if(furi_hal_subghz_start_async_tx(tx_callback, &ctx)) {
-            while(!furi_hal_subghz_is_async_tx_complete()) {
-                furi_delay_ms(10);
+            uint8_t* custom = NULL;
+            if(load_preset(ff, device, &custom)) {
+                subghz_devices_set_frequency(device, freq);
+
+                TxCtx ctx = {.data = data, .count = total, .pos = 0};
+                if(subghz_devices_start_async_tx(device, tx_callback, &ctx)) {
+                    while(!subghz_devices_is_async_complete_tx(device)) {
+                        furi_delay_ms(10);
+                    }
+                    subghz_devices_stop_async_tx(device);
+                    res = SendOk;
+                }
             }
-            furi_hal_subghz_stop_async_tx();
-            res = SendOk;
+            if(custom) free(custom);
+
+            subghz_devices_idle(device);
+            subghz_devices_sleep(device);
+            subghz_devices_end(device);
         }
-        furi_hal_subghz_sleep();
+        subghz_devices_deinit();
     } while(false);
 
     if(data) free(data);
